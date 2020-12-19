@@ -41,8 +41,8 @@ Adafruit_SSD1306 display(128, 32, &Wire, OLED_RESET);
 
 
 // nombre de boutons local(leonardo), mega1, nano1, mega2, nano2
-const uint8_t rotaryCount[BOARD_COUNT] = {5,6,1,6,2};
-const uint8_t buttonCount[BOARD_COUNT] = {1,28,5,30,2};
+const uint8_t rotaryCount[BOARD_COUNT] = {5,6,0,0,0};
+const uint8_t buttonCount[BOARD_COUNT] = {1,28,0,0,0};
 const uint8_t sliderCount[BOARD_COUNT] = {2,2,0,0,0};
 const uint8_t joystickCount[BOARD_COUNT] = {1,0,0,0,0};
 const uint8_t displayCount[BOARD_COUNT] = {0,16,0,0,0};

@@ -1,4 +1,3 @@
-#include <LinkedList.h>
 #include <Wire.h>
 #include <Encoder.h>
 #include <Keypad.h>
@@ -17,10 +16,18 @@
 
 
 /*
-Envoyer les inputs rotary telquel > traiter par leonardo
-ANNULER utilisation de liste. Trop lourd, création en mémoire trop souvent.
+TODO
 
+ROTARY
+Envoyer les inputs rotary telquel > traiter par leonardo
+
+ANNULER utilisation de liste. Trop lourd, création en mémoire trop souvent.
 Un seul emplacement ? si déja utilisé on ne rajoute rien > au prochain tour il comparera toujours positif avec précédent état et rajoutera si emplacement libéré
+
+
+Rotary off ? non ?
+
+switch ? off ? oui ? non ?
 */
 
 // DISPLAY
@@ -89,27 +96,21 @@ const uint8_t MASQUE_5b=0x1F;
 #define DISPLAY_ON 0x88
 #define DISPLAY_OFF 0x80
 
-const uint8_t totalButton = LOCAL_SINGLE_BUTTON_NB + LOCAL_ROTARY_COUNT*10 + localTotalMatriceButton;
+const uint8_t totalButton = LOCAL_SINGLE_BUTTON_NB + LOCAL_ROTARY_COUNT*2 + localTotalMatriceButton;
 
 // Last state of the button
 uint8_t lastButtonState[totalButton];
 uint8_t lastSliderState[SLIDER_COUNT];
 
-class buttonDeclare
+struct buttonUpdate
 {
-  public :
   int button;
   uint8_t state;
-  uint8_t decompte;
-};
+}buttonUpdate;
 
-/*
-struct pButtonDeclare
-{
-  buttonDeclare * buttonToDeclare;
-}pButtonDeclare; 
-*/
-LinkedList<buttonDeclare> *listToDeclare = new LinkedList<buttonDeclare>();
+buttonUpdate buttonToSend;
+
+
 
 void setup()
 {
@@ -152,12 +153,13 @@ void loop(){
   {
     char key = matrices[i].getKey();   //Surveiller les boutons
     if (key != NO_KEY){
+      uint8_t button =key+offsetButton;
+      if (lastButtonState[button]==0)
+      {
+        buttonToSend.button= button;
+        buttonToSend.state=1;
+      }
 
-      buttonDeclare nouveauBouton;
-      nouveauBouton.button=key+offsetButton;
-      nouveauBouton.state=1;
-      nouveauBouton.decompte=0;
-      listToDeclare->add(nouveauBouton);
     }
     offsetButton=offsetButton+localCountMatriceButton[i];
   }
