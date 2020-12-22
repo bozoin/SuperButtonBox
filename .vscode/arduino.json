@@ -1,6 +1,7 @@
 {
-    "board": "esp8266:esp8266:d1",
-    "sketch": "buttonBoxLeonardo\\buttonBoxLeonardo.ino",
-    "configuration": "xtal=80,vt=flash,exception=legacy,ssl=all,eesz=4M2M,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=921600",
-    "port": "COM45"
+    "board": "arduino:avr:mega",
+    "sketch": "buttonBoxMega1/buttonBoxMega1.ino",
+    "configuration": "cpu=atmega2560",
+    "port": "COM45",
+    "programmer": "AVRISP mkII"
 }

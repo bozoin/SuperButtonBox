@@ -18,6 +18,8 @@
 /*
 TODO
 
+REFAIRE REQUEST EVENTS
+
 ROTARY
 Envoyer les inputs rotary telquel > traiter par leonardo
 
@@ -25,10 +27,11 @@ ANNULER utilisation de liste. Trop lourd, création en mémoire trop souvent.
 Un seul emplacement ? si déja utilisé on ne rajoute rien > au prochain tour il comparera toujours positif avec précédent état et rajoutera si emplacement libéré
 
 
-Rotary off ? non ?
+Rotary : envoie pulse. remise à zero par leonardo
 
-switch ? off ? oui ? non ?
+switch : envoie changement d'état. Traité par leonardo
 */
+#define VIDE 255
 
 // DISPLAY
 #define LOCAL_DISPLAY_NB 16
@@ -47,8 +50,8 @@ Encoder rotaryEncoder[LOCAL_ROTARY_COUNT] ={
   Encoder(21, 9)
 };
 
-// BUTTON
-#define LOCAL_SINGLE_BUTTON_NB 1
+// BUTTON 
+#define LOCAL_SINGLE_BUTTON_NB 1   // single button / switch 2 / switch 3 COMPREND LES SWITCHS
 const uint8_t localSingleButton[LOCAL_SINGLE_BUTTON_NB]={10};
 
 // MATRICE DE BOUTON
@@ -72,6 +75,13 @@ Keypad matrices[LOCAL_MATRICE_COUNT] = {
 };
 const uint8_t localCountMatriceButton [LOCAL_MATRICE_COUNT]={ROWS1*COLS1};
 const uint8_t localTotalMatriceButton = ROWS1*COLS1; // METTRE A JOUR EN AJOUTANT DES MATRICES
+
+
+// SWITCHS 2 POSITIONS
+
+
+// SWITCHS 3 POSITIONS
+
 
 //SLIDER
 #define LOCAL_SLIDER_NB 2
@@ -104,13 +114,11 @@ uint8_t lastSliderState[SLIDER_COUNT];
 
 struct buttonUpdate
 {
-  int button;
+  uint8_t button;
   uint8_t state;
-}buttonUpdate;
+};
 
-buttonUpdate buttonToSend;
-
-
+struct buttonUpdate buttonToSend;
 
 void setup()
 {
@@ -127,9 +135,17 @@ void setup()
     digitalWrite(localDisplay[disp],LOW);
   }
 
-    // Init Button Pins
+    // Init Button Pins TODO init input
+  initButton();
   pinMode(pinTest, INPUT_PULLUP);
   pinMode(sliderTest, INPUT);
+}
+
+void initButton(){
+  for (uint8_t i =0; i<LOCAL_SINGLE_BUTTON_NB; i++)
+  {
+    pinMode(localSingleButton[i], INPUT_PULLUP);
+  }
 }
 
 void loop(){
@@ -147,23 +163,104 @@ void loop(){
           digitalWrite(localDisplay[com],LOW);
     }
   }  */
+  if(buttonToSend.button==VIDE)
+  {
+    getLocalRotary();
+  }
+    if(buttonToSend.button==VIDE)
+  {
+    getLocalMatrice();
+  }
+    if(buttonToSend.button==VIDE)
+  {
+    getLocalButtons();
+  }
+  if(buttonToSend.button==VIDE)
+  {
+    getLocalAxis();
+  }
+  delay(T_CYCLE);  
+}
+
+void getLocalMatrice()
+{
+
   int offsetButton= LOCAL_SINGLE_BUTTON_NB;
 
   for (int i=0;i<LOCAL_MATRICE_COUNT;i++)
   {
     char key = matrices[i].getKey();   //Surveiller les boutons
-    if (key != NO_KEY){
+    if(key==NO_KEY)
+    {
+      for(int j=0; j<localCountMatriceButton[i];j++)
+      {
+        if (lastButtonState[offsetButton+j]==1 && buttonToSend.button==VIDE)
+        {
+          buttonToSend.button= offsetButton+j;
+          buttonToSend.state=0;
+          lastButtonState[offsetButton+j]=0;
+        }
+      }
+    }
+    else
+    {
+      Serial.println(key);  // DEBUG
       uint8_t button =key+offsetButton;
-      if (lastButtonState[button]==0)
+      if (lastButtonState[button]==0 && buttonToSend.button==VIDE)
       {
         buttonToSend.button= button;
         buttonToSend.state=1;
+        lastButtonState[button]=1;
       }
-
     }
     offsetButton=offsetButton+localCountMatriceButton[i];
   }
-  delay(T_CYCLE);  
+
+}
+
+void getLocalAxis(){
+
+  uint8_t slider[SLIDER_COUNT];
+  for(int i = 0; i<SLIDER_COUNT;i++){slider[i]=analogRead(sliderTest)/4;}
+  for(int i = 0; i<SLIDER_COUNT;i++)
+  {
+    if(lastSliderState[i]!=slider[i] && buttonToSend.button==VIDE)
+    {
+        buttonToSend.button= i+totalButton;
+        buttonToSend.state=slider[i];
+        lastSliderState[i]=slider[i];
+    }  
+  }
+}
+
+void getLocalButtons(){
+  for (uint8_t i =0; i<LOCAL_SINGLE_BUTTON_NB; i++)
+  {
+    int currentButtonState = !digitalRead(localSingleButton[i]);
+    if (currentButtonState != lastButtonState[i] && buttonToSend.button==VIDE)
+    {
+        buttonToSend.button= i;
+        buttonToSend.state=currentButtonState;
+        lastButtonState[i] = currentButtonState;
+    }
+  }
+}
+
+void getLocalRotary(){
+  long rotaryRead;
+  for(int i = 0; i<LOCAL_ROTARY_COUNT; i++){
+    rotaryRead = rotaryEncoder[i].read();
+      if (rotaryRead<0) {
+        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+i*2;
+        buttonToSend.state=1;
+        rotaryEncoder[i].write(0);
+      }
+      else if (rotaryRead>0) {
+        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+i*2+1;
+        buttonToSend.state=1;
+        rotaryEncoder[i].write(0);
+      }
+  }
 }
 
 void requestEvents()
@@ -244,95 +341,3 @@ void loop(){
 
 */
 
-
-
-/* LINKED LIST
-
-To declare a LinkedList object
-
-// Instantiate a LinkedList that will hold 'integer'
-LinkedList<int> myLinkedList = LinkedList<int>();
-
-// Or just this
-LinkedList<int> myLinkedList;
-
-// But if you are instantiating a pointer LinkedList...
-LinkedList<int> *myLinkedList = new LinkedList<int>();
-
-// If you want a LinkedList with any other type such as 'MyClass'
-// Make sure you call delete(MyClass) when you remove!
-LinkedList<MyClass> *myLinkedList = new LinkedList<MyClass>();
-
-Getting the size of the linked list
-
-// To get the size of a linked list, make use of the size() method
-int theSize = myList.size();
-
-// Notice that if it's pointer to the linked list, you should use -> instead
-int theSize = myList->size();
-
-Adding elements
-
-// add(obj) method will insert at the END of the list
-myList.add(myObject);
-
-// add(index, obj) method will try to insert the object at the specified index
-myList.add(0, myObject); // Add at the beginning
-myList.add(3, myObject); // Add at index 3
-
-// unshift(obj) method will insert the object at the beginning
-myList.unshift(myObject);
-
-Getting elements
-
-// get(index) will return the element at index
-// (notice that the start element is 0, not 1)
-
-// Get the FIRST element
-myObject = myList.get(0);
-
-// Get the third element
-myObject = myList.get(2);
-
-// Get the LAST element
-myObject = myList.get(myList.size() - 1);
-
-Changing elements
-
-// set(index, obj) method will change the object at index to obj
-
-// Change the first element to myObject
-myList.set(0, myObject);
-
-// Change the third element to myObject
-myList.set(2, myObject);
-
-// Change the LAST element of the list
-myList.set(myList.size() - 1, myObject);
-
-Removing elements
-
-// remove(index) will remove and return the element at index
-
-// Remove the first object
-myList.remove(0);
-
-// Get and Delete the third element
-myDeletedObject = myList.remove(2);
-
-// pop() will remove and return the LAST element
-myDeletedObject = myList.pop();
-
-// shift() will remove and return the FIRST element
-myDeletedObject = myList.shift();
-
-// clear() will erase the entire list, leaving it with 0 elements
-// NOTE: Clear wont DELETE/FREE memory from Pointers, if you
-// are using Classes/Poiners, manualy delete and free those.
-myList.clear();
-
-Sorting elements
-
-// Sort using a comparator function
-myList.sort(myComparator);
-*/

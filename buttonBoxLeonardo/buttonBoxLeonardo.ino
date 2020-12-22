@@ -26,6 +26,11 @@ un joystick pour les rotary knob (10 ?)
 
 récupérer les rotary input des autres cartes de façon spécifique
 
+SWITCH !
+un joystick état
+un joystick pulse
+Récupérer les switch input des autres cartes de façon spécifique
+
 */
 
 // Screen
