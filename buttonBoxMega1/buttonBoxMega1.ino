@@ -18,18 +18,7 @@
 /*
 TODO
 
-REFAIRE REQUEST EVENTS
 
-ROTARY
-Envoyer les inputs rotary telquel > traiter par leonardo
-
-ANNULER utilisation de liste. Trop lourd, création en mémoire trop souvent.
-Un seul emplacement ? si déja utilisé on ne rajoute rien > au prochain tour il comparera toujours positif avec précédent état et rajoutera si emplacement libéré
-
-
-Rotary : envoie pulse. remise à zero par leonardo
-
-switch : envoie changement d'état. Traité par leonardo
 */
 #define VIDE 255
 
@@ -76,13 +65,6 @@ Keypad matrices[LOCAL_MATRICE_COUNT] = {
 const uint8_t localCountMatriceButton [LOCAL_MATRICE_COUNT]={ROWS1*COLS1};
 const uint8_t localTotalMatriceButton = ROWS1*COLS1; // METTRE A JOUR EN AJOUTANT DES MATRICES
 
-
-// SWITCHS 2 POSITIONS
-
-
-// SWITCHS 3 POSITIONS
-
-
 //SLIDER
 #define LOCAL_SLIDER_NB 2
 const int localSliders[LOCAL_SLIDER_NB] = {A0, A1};
@@ -94,12 +76,6 @@ const uint8_t localJoys[LOCAL_JOY_NB*2] = {};
 #define I2C_SLAVE_ADDRESS 11 
 #define T_CYCLE 15
 #define BUTTON_COUNT 40 // (256 max)
-#define SLIDER_COUNT 4
-#define FIRST_BUTTON 40
-
-// TEST
-#define pinTest 9
-#define sliderTest A2
 
 // MASQUE
 const uint8_t MASQUE_5b=0x1F;
@@ -110,7 +86,7 @@ const uint8_t totalButton = LOCAL_SINGLE_BUTTON_NB + LOCAL_ROTARY_COUNT*2 + loca
 
 // Last state of the button
 uint8_t lastButtonState[totalButton];
-uint8_t lastSliderState[SLIDER_COUNT];
+uint8_t lastSliderState[LOCAL_SLIDER_NB];
 
 struct buttonUpdate
 {
@@ -124,27 +100,45 @@ void setup()
 {
   Serial.begin(9600); //DEBUG
 
+  initI2C();
+  initDisplay();
+  initButton();
+  initRotary();
+  initSlider();
+}
+
+void initI2C(){
   Wire.begin(I2C_SLAVE_ADDRESS);
   delay(1000);               
   Wire.onRequest(requestEvents);
   Wire.onReceive(receiveEvents);
+}
 
+void initDisplay(){
   for (int disp = 0; disp<LOCAL_DISPLAY_NB;disp++ )
   {
     pinMode(localDisplay[disp],OUTPUT);
     digitalWrite(localDisplay[disp],LOW);
   }
+}
 
-    // Init Button Pins TODO init input
-  initButton();
-  pinMode(pinTest, INPUT_PULLUP);
-  pinMode(sliderTest, INPUT);
+void initRotary(){
+  for(int i = 0;i<LOCAL_ROTARY_COUNT;i++){
+      rotaryEncoder[i].write(0); // configure tous les rotary à 0
+  }
 }
 
 void initButton(){
   for (uint8_t i =0; i<LOCAL_SINGLE_BUTTON_NB; i++)
   {
     pinMode(localSingleButton[i], INPUT_PULLUP);
+  }
+}
+
+void initSlider(){
+  for (uint8_t i =0; i<LOCAL_SLIDER_NB; i++)
+  {
+    pinMode(localSliders[i], INPUT);
   }
 }
 
@@ -167,11 +161,11 @@ void loop(){
   {
     getLocalRotary();
   }
-    if(buttonToSend.button==VIDE)
+  if(buttonToSend.button==VIDE)
   {
     getLocalMatrice();
   }
-    if(buttonToSend.button==VIDE)
+  if(buttonToSend.button==VIDE)
   {
     getLocalButtons();
   }
@@ -215,14 +209,13 @@ void getLocalMatrice()
     }
     offsetButton=offsetButton+localCountMatriceButton[i];
   }
-
 }
 
 void getLocalAxis(){
 
-  uint8_t slider[SLIDER_COUNT];
-  for(int i = 0; i<SLIDER_COUNT;i++){slider[i]=analogRead(sliderTest)/4;}
-  for(int i = 0; i<SLIDER_COUNT;i++)
+  uint8_t slider[LOCAL_SLIDER_NB];
+  for(int i = 0; i<LOCAL_SLIDER_NB;i++){slider[i]=analogRead(localSliders[i])/4;}
+  for(int i = 0; i<LOCAL_SLIDER_NB;i++)
   {
     if(lastSliderState[i]!=slider[i] && buttonToSend.button==VIDE)
     {
@@ -251,12 +244,12 @@ void getLocalRotary(){
   for(int i = 0; i<LOCAL_ROTARY_COUNT; i++){
     rotaryRead = rotaryEncoder[i].read();
       if (rotaryRead<0) {
-        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+i*2;
+        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+localTotalMatriceButton+i*2;
         buttonToSend.state=1;
         rotaryEncoder[i].write(0);
       }
       else if (rotaryRead>0) {
-        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+i*2+1;
+        buttonToSend.button= LOCAL_SINGLE_BUTTON_NB+localTotalMatriceButton+i*2+1;
         buttonToSend.state=1;
         rotaryEncoder[i].write(0);
       }
@@ -265,12 +258,14 @@ void getLocalRotary(){
 
 void requestEvents()
 {
+  /*
   uint8_t slider[SLIDER_COUNT];
   for(int i = 0; i<SLIDER_COUNT;i++){slider[i]=analogRead(sliderTest)/4;}
   for(int i = 0; i<SLIDER_COUNT;i++){Wire.write(slider[i]);}
-  Wire.write(40);
-  Wire.write(1);
-
+  */
+  Wire.write(buttonToSend.button);
+  Wire.write(buttonToSend.state);
+  buttonToSend.button=VIDE;
 }
 
 void receiveEvents(int numBytes)
@@ -294,50 +289,3 @@ void receiveEvents(int numBytes)
     }
   }
 }
-
-
-
-
-/*
-
-
-//==== Utilisation de clavier matriciel 4 x4 boutons
-// tiptopboards.com
-// Rolland 23 08 2013
-// télécharger et installer la librairie Keypad
-//
-//===================================================
-#include <Keypad.h>
-
-//Définition du clavier 4 x4 boutons
-const byte ROWS = 4; //4 lignes
-const byte COLS = 4; //4 colonnes
-// Donner un code Ascii aux 16 touches, par exemple 0-F
-char keys[ROWS][COLS] = {
-  {'1','2','3','4'},
-  {'5','6','7','8'},
-  {'9','10','A','B'},
-  {'C','D','E','F'}
-};
-byte rowPins[ROWS] = {2, 3, 4, 5}; //les 4 lignes du clavier sur les pins arduino digitales
-byte colPins[COLS] = {6, 7, 8, 9}; //les 4 colonnes du clavier
-
-//Créer cet objet clavier
-Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
-
-void setup(){
-  Serial.begin(9600);   //Moniteur série (écran PC)
-  Serial.println("Utilisation du clavier 4 x f4 touches");
-}
-
-void loop(){
-  char key = keypad.getKey();   //Surveiller le calvier
-
-  if (key != NO_KEY){
-    Serial.println(key);  //Afficher le code ascii de la touche appuyée
-  }
-}
-
-
-*/
-

@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:megaADK",
+    "sketch": "buttonBoxMega1/buttonBoxMega1.ino",
+    "port": "COM45",
+    "programmer": "AVRISP mkII"
+}

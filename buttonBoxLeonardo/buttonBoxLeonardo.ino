@@ -21,8 +21,8 @@ TODO
 ROTARY !
 créer
 un joystick pour les pulses
-un joystick pour les axes
 un joystick pour les rotary knob (10 ?)
+X joystick pour les axes
 
 récupérer les rotary input des autres cartes de façon spécifique
 
@@ -41,9 +41,9 @@ Adafruit_SSD1306 display(128, 32, &Wire, OLED_RESET);
 #define BUTTON_MAX 250 // (254 max)
 #define T_CYCLE 5
 #define T_RAZROT 15
-#define PAD_COUNT 3 //(joy*2+slider+rotary)/11
+#define PAD_COUNT 3 // 1 base button (joy*2+sliders) / 1 state switch / 1 pulse switch / 1 pulses / 1 rotary knob / X axes : (rotary)/11
 #define BOARD_COUNT 5
-
+#define VIDE 255
 
 // nombre de boutons local(leonardo), mega1, nano1, mega2, nano2
 const uint8_t rotaryCount[BOARD_COUNT] = {5,6,0,0,0};
