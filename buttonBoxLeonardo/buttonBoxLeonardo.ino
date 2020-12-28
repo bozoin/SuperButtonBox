@@ -1,4 +1,5 @@
-free #include <Adafruit_SSD1306.h>
+//free
+#include <Adafruit_SSD1306.h>
 #include <Joystick.h>
 #include <Wire.h>
 #include <Encoder.h>
@@ -22,7 +23,7 @@ ROTARY !
 créer
 un joystick pour les pulses
 un joystick pour les rotary knob (10 ?)
-X joystick pour les axes
+X joystick pour les axes (TOUT A LA FIN)
 
 récupérer les rotary input des autres cartes de façon spécifique
 
@@ -31,7 +32,28 @@ un joystick état
 un joystick pulse
 Récupérer les switch input des autres cartes de façon spécifique
 
+
+Switch on off joystick pulse
+Switch on off joystick rotary
+Switch on off joystick axe
+Switch on off joystick état
+Switch on off joystick pulse
+switch mom + - change display
+
+
+tableau string écran
+
 */
+
+// écrans display
+#define DISPLAYCOUNT 32
+#define DISPLAYCONFCOUNT 3
+const String displayText[DISPLAYCONFCOUNT][DISPLAYCOUNT]={
+  {"Button1"    ,"Button2"    ,"Button3"    ,"Button4"    ,"Button5"    ,"Button6"    ,"Button7"    ,"Button8"    ,"Button9"    ,"Button10"    ,"Button11"    ,"Button12"    ,"Button13"    ,"Button14"    ,"Button15"    ,"Button16"    ,"Button17"    ,"Button18"    ,"Button19"    ,"Button20"    ,"Button21"    ,"Button22"     ,"Button23"    ,"Button24"    ,"Button25"    ,"Button26"    ,"Button27"    ,"Button28"    ,"Button29"    ,"Button30"    ,"Button31"    ,"Button32"},
+  {"Button1"    ,"Button2"    ,"Button3"    ,"Button4"    ,"Button5"    ,"Button6"    ,"Button7"    ,"Button8"    ,"Button9"    ,"Button10"    ,"Button11"    ,"Button12"    ,"Button13"    ,"Button14"    ,"Button15"    ,"Button16"    ,"Button17"    ,"Button18"    ,"Button19"    ,"Button20"    ,"Button21"    ,"Button22"     ,"Button23"    ,"Button24"    ,"Button25"    ,"Button26"    ,"Button27"    ,"Button28"    ,"Button29"    ,"Button30"    ,"Button31"    ,"Button32"},
+  {"Button1"    ,"Button2"    ,"Button3"    ,"Button4"    ,"Button5"    ,"Button6"    ,"Button7"    ,"Button8"    ,"Button9"    ,"Button10"    ,"Button11"    ,"Button12"    ,"Button13"    ,"Button14"    ,"Button15"    ,"Button16"    ,"Button17"    ,"Button18"    ,"Button19"    ,"Button20"    ,"Button21"    ,"Button22"     ,"Button23"    ,"Button24"    ,"Button25"    ,"Button26"    ,"Button27"    ,"Button28"    ,"Button29"    ,"Button30"    ,"Button31"    ,"Button32"}
+};
+
 
 // Screen
 #define OLED_RESET  -1 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -41,7 +63,7 @@ Adafruit_SSD1306 display(128, 32, &Wire, OLED_RESET);
 #define BUTTON_MAX 250 // (254 max)
 #define T_CYCLE 5
 #define T_RAZROT 15
-#define PAD_COUNT 3 // 1 base button (joy*2+sliders) / 1 state switch / 1 pulse switch / 1 pulses / 1 rotary knob / X axes : (rotary)/11
+#define PAD_COUNT 7 // 1 base button (joy*2+sliders) / 1 state switch / 1 pulse switch / 1 pulses / 1 rotary knob / X axes : (rotary)/11
 #define BOARD_COUNT 5
 #define VIDE 255
 
@@ -70,16 +92,44 @@ uint8_t rotaryPulse1 = 0;
 #define minRotaryPot 0
 
 // Déclaration des PADS (différents périphériques)
+/*
+1 base button (joy*2+sliders)
+1 state switch
+1 pulse switch
+1 pulses
+1 rotary knob
+2 axes
+*/
 Joystick_ pads[PAD_COUNT] = {
   Joystick_(0x03, JOYSTICK_TYPE_JOYSTICK, BUTTON_MAX, 0, true, true, true, true, true, true, true, true, true, true, true),
-  Joystick_(0x04, JOYSTICK_TYPE_MULTI_AXIS , 0, 0, true, true, true, true, true, true, true, true, true, true, true),
-  Joystick_(0x05, JOYSTICK_TYPE_MULTI_AXIS , 0, 0, true, true, true, true, true, true, true, true, true, true, true)
+  Joystick_(0x04, JOYSTICK_TYPE_JOYSTICK, BUTTON_MAX, 0, false, false, false, false, false, false, false, false, false, false, false),
+  Joystick_(0x05, JOYSTICK_TYPE_JOYSTICK, BUTTON_MAX, 0, false, false, false, false, false, false, false, false, false, false, false),
+  Joystick_(0x06, JOYSTICK_TYPE_JOYSTICK, BUTTON_MAX, 0, false, false, false, false, false, false, false, false, false, false, false),
+  Joystick_(0x07, JOYSTICK_TYPE_JOYSTICK, BUTTON_MAX, 0, false, false, false, false, false, false, false, false, false, false, false),
+  Joystick_(0x08, JOYSTICK_TYPE_MULTI_AXIS, 0, 0, true, true, true, true, true, true, true, true, true, true, true),
+  Joystick_(0x09, JOYSTICK_TYPE_MULTI_AXIS, 0, 0, true, true, true, true, true, true, true, true, true, true, true)
 };
+
+
+#define padBase 0
+#define padSwitchState 1
+#define padSwitchPulse 2
+#define padRotaryPulse 3
+#define padRotaryKnob 4
+#define padRotaryAxe 5
+#define padRotaryAxeCount 2
+
 // MASQUE
 //const uint8_t MASQUE_5b=0x1F;  //Plus utilisé
 #define EXTERNAL_DISPLAY_ON 0x88
 #define EXTERNAL_DISPLAY_OFF 0x80
 
+
+uint8_t padSwitchStateEnable;
+uint8_t padSwitchPulseEnable;
+uint8_t padRotaryPulseEnable;
+uint8_t padRotaryKnobEnable;
+uint8_t padRotaryAxeEnable;
 
 // Last state of the button
 uint8_t * lastButtonState;
@@ -136,16 +186,16 @@ void setup() {
     rotaryTotal+=rotaryCount[i];
     joystickTotal+=joystickCount[i];
     sliderTotal+=sliderCount[i];
-    axePad[i]=malloc((joystickCount[i]*2 + sliderCount[i] + rotaryCount[i]) *sizeof(uint8_t));
-    axeNum[i]=malloc((joystickCount[i]*2 + sliderCount[i] + rotaryCount[i]) *sizeof(uint8_t));
+    axePad[i]=(uint8_t*)malloc((joystickCount[i]*2 + sliderCount[i] + rotaryCount[i]) *sizeof(uint8_t));
+    axeNum[i]=(uint8_t*)malloc((joystickCount[i]*2 + sliderCount[i] + rotaryCount[i]) *sizeof(uint8_t));
     displayTotal+=displayCount[i];
   }
   
   // Init & malloc tab
-  lastButtonState=malloc(buttonTotal*sizeof(uint8_t));
-  lastAxisState=malloc((sliderTotal+rotaryTotal+joystickTotal*2)*sizeof(uint8_t));
-  rotaryConf=malloc(rotaryTotal*sizeof(uint8_t));
-  displayTxt=malloc(displayTotal*sizeof(String));
+  lastButtonState=(uint8_t*)malloc(buttonTotal*sizeof(uint8_t));
+  lastAxisState=(uint8_t*)malloc((sliderTotal+rotaryTotal+joystickTotal*2)*sizeof(uint8_t));
+  rotaryConf=(uint8_t*)malloc(rotaryTotal*sizeof(uint8_t));
+  displayTxt=(String*)malloc(displayTotal*sizeof(String));
 
   // Init axis tab
   initAxis();
@@ -234,7 +284,7 @@ void initDisplay(){
   // mets les display externe en low
   for (int i =1 ; i< BOARD_COUNT;i++)
   {
-      for (int j =0 ; j< displayCount[i];j++)
+      for (uint8_t j =0 ; j< displayCount[i];j++)
       {
         uint8_t buff[2]={EXTERNAL_DISPLAY_OFF,j};
         Wire.beginTransmission(i2c_addr[i]);   
@@ -280,7 +330,7 @@ void refreshScreen(){
   // initialisation des display externes des pins en output et en écoute (high)
   for (int i =1 ; i< BOARD_COUNT;i++)
   {
-      for (int j =0 ; j< displayCount[i];j++)
+      for (uint8_t j =0 ; j< displayCount[i];j++)
       {/*
         uint16_t msg = j;
         msg|=EXTERNAL_DISPLAY_ON;
