@@ -66,6 +66,7 @@ Adafruit_SSD1306 display(128, 32, &Wire, OLED_RESET);
 #define PAD_COUNT 7 // 1 base button (joy*2+sliders) / 1 state switch / 1 pulse switch / 1 pulses / 1 rotary knob / X axes : (rotary)/11
 #define BOARD_COUNT 5
 #define VIDE 255
+#define DISPLAY_I2C 0x3c
 
 // nombre de boutons local(leonardo), mega1, nano1, mega2, nano2
 const uint8_t rotaryCount[BOARD_COUNT] = {5,6,0,0,0};
@@ -236,10 +237,29 @@ void setup() {
   initDisplay();
 }
 
+void i2cScann(){
+  byte error, address;
+  uint8_t nDevices = 0;
+  uint8_t devices[127];
+  
+  for(address = 1; address < 127; address++ )
+  {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    if (error==0 && address!=0x3c)
+    {
+      nDevices++;
+      devices[nDevices]=address;
+    }
+  }
+}
+
 void loop() {
   requestButtonUpdate();
   delay(T_CYCLE);
 }
+
+
 
 void initDisplay(){
   // initialisation des display local des pins en output et en écoute (high)
@@ -290,11 +310,6 @@ void initDisplay(){
         Wire.beginTransmission(i2c_addr[i]);   
         Wire.write(buff,2);
         Wire.endTransmission(); 
-        /*
-        uint16_t msg = j;
-        msg|=EXTERNAL_DISPLAY_OFF;
-        sendI2CMsg(msg, i2c_addr[i]);
-        */
       }
   }
 
@@ -307,6 +322,75 @@ void initDisplay(){
   delay(1000); // on attend que tous les écran sont prêts
 
   refreshScreen();
+}
+
+void confScreen(uint8_t confN){
+  // initialisation des display local des pins en output et en écoute (high)
+
+  int disp = 0;
+  while (disp<LOCAL_DISPLAY_NB)
+  {
+      digitalWrite(localDisplay[disp],HIGH);
+      display.clearDisplay();
+      if (displayText[confN][disp].length()<4)
+      {
+        display.setTextSize(5);
+      }
+      else if (displayText[confN][disp].length()<7)
+      {
+        display.setTextSize(3);
+      }
+      else
+      {
+        display.setTextSize(1);
+      }
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(0, 0);
+      //display.println(F(displayText[confN][disp]));
+      display.println(displayText[confN][disp]);
+      display.display();
+      digitalWrite(localDisplay[disp],LOW);
+      delay(100);
+      disp++;
+  }
+  // initialisation des display externes des pins en output et en écoute (high)
+  for (int i =1 ; i< BOARD_COUNT;i++)
+  {
+      for (uint8_t j =0 ; j< displayCount[i];j++)
+      {
+        uint8_t buff[2]={EXTERNAL_DISPLAY_ON,j};
+        Wire.beginTransmission(i2c_addr[i]);   
+        Wire.write(buff,2);
+        Wire.endTransmission(); 
+
+        delay(100);
+
+        display.clearDisplay();
+        if (displayText[confN][disp].length()<4)
+        {
+          display.setTextSize(5);
+        }
+        else if (displayText[confN][disp].length()<7)
+        {
+          display.setTextSize(3);
+        }
+        else
+        {
+          display.setTextSize(1);
+        }
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0, 0);
+        //display.println(F(displayText[confN][disp]));
+        display.println(displayText[confN][disp]);
+        display.display();      // Show initial text
+        delay(100);
+        uint8_t buff2[2]={EXTERNAL_DISPLAY_OFF,j};
+        Wire.beginTransmission(i2c_addr[i]);   
+        Wire.write(buff2,2);
+        Wire.endTransmission(); 
+        disp++;
+      }
+  }
 }
 
 void refreshScreen(){
@@ -356,11 +440,6 @@ void refreshScreen(){
         Wire.beginTransmission(i2c_addr[i]);   
         Wire.write(buff2,2);
         Wire.endTransmission(); 
-/*
-        msg = j;
-        msg|=EXTERNAL_DISPLAY_OFF;
-        sendI2CMsg(msg, i2c_addr[i]); //mets le premier bite de j à 1 pour mettre j en high
-*/
         disp++;
       }
   }
