@@ -20,11 +20,25 @@ TODO
 
 
 */
+//TYPES
+#define TYPE_BUTTON 1
+#define TYPE_JOY 2
+#define TYPE_SLIDER 3
+#define TYPE_ROTARY 4
+#define TYPE_SWITCH2 5
+#define TYPE_SWITCH3 6
+
 #define VIDE 255
 
 // DISPLAY
 #define LOCAL_DISPLAY_NB 16
 const uint8_t localDisplay[LOCAL_DISPLAY_NB] = {22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37};
+
+// SWITCH
+#define LOCAL_SWITCH2_COUNT 2
+const uint8_t localSwitch2[LOCAL_SWITCH2_COUNT] = {10,11};
+#define LOCAL_SWITCH3_COUNT 2
+const uint8_t localSwitch3[LOCAL_SWITCH3_COUNT] = {12,13,14,15};
 
 // ROTARY ENCODER
 #define LOCAL_ROTARY_COUNT  6
@@ -39,7 +53,7 @@ Encoder rotaryEncoder[LOCAL_ROTARY_COUNT] ={
 };
 
 // BUTTON 
-#define LOCAL_SINGLE_BUTTON_NB 1   // single button / switch 2 / switch 3 COMPREND LES SWITCHS
+#define LOCAL_SINGLE_BUTTON_NB 1   // single button
 const uint8_t localSingleButton[LOCAL_SINGLE_BUTTON_NB]={10};
 
 // MATRICE DE BOUTON
@@ -82,6 +96,9 @@ const uint8_t MASQUE_5b=0x1F;
 #define DISPLAY_OFF 0x80
 
 const uint8_t totalButton = LOCAL_SINGLE_BUTTON_NB + LOCAL_ROTARY_COUNT*2 + localTotalMatriceButton;
+const uint8_t localMOMButtonCount = LOCAL_SINGLE_BUTTON_NB + localTotalMatriceButton;
+
+uint8_t confRequest = 0;
 
 // Last state of the button
 uint8_t lastButtonState[totalButton];
@@ -89,6 +106,7 @@ uint8_t lastSliderState[LOCAL_SLIDER_NB];
 
 struct buttonUpdate
 {
+  uint8_t type;
   uint8_t button;
   uint8_t state;
 };
@@ -262,9 +280,25 @@ void requestEvents()
   for(int i = 0; i<SLIDER_COUNT;i++){slider[i]=analogRead(sliderTest)/4;}
   for(int i = 0; i<SLIDER_COUNT;i++){Wire.write(slider[i]);}
   */
-  Wire.write(buttonToSend.button);
-  Wire.write(buttonToSend.state);
-  buttonToSend.button=VIDE;
+  if (confRequest==1)
+  {
+    Wire.write(LOCAL_DISPLAY_NB);
+    Wire.write(localMOMButtonCount);
+    Wire.write(LOCAL_SWITCH2_COUNT);
+    Wire.write(LOCAL_SWITCH3_COUNT);
+    Wire.write(LOCAL_ROTARY_COUNT);
+    Wire.write(LOCAL_SLIDER_NB);
+    Wire.write(LOCAL_JOY_NB);
+
+    confRequest=0;
+  }
+  else
+  {
+    Wire.write(buttonToSend.type)
+    Wire.write(buttonToSend.button);
+    Wire.write(buttonToSend.state);
+    buttonToSend.button=VIDE;
+  }
 }
 
 void receiveEvents(int numBytes)
@@ -275,16 +309,23 @@ void receiveEvents(int numBytes)
       n[i]= Wire.read();
       Serial.println((int)n[i]);
   }
-  for (int i=0; i<numBytes; i=i+2)
+  if (numBytes==1 && n[0]==VIDE)
   {
-    if(n[i] == DISPLAY_ON)
+        confRequest=1;
+  }
+  else
+  {
+    for (int i=0; i<numBytes; i=i+2)
     {
-          digitalWrite(localDisplay[n[i+1]],HIGH);
-    }
-    
-    else if(n[i] == DISPLAY_OFF)
-    {
-          digitalWrite(localDisplay[n[i+1]],LOW);
+      if(n[i] == DISPLAY_ON)
+      {
+            digitalWrite(localDisplay[n[i+1]],HIGH);
+      }
+      
+      else if(n[i] == DISPLAY_OFF)
+      {
+            digitalWrite(localDisplay[n[i+1]],LOW);
+      }
     }
   }
 }
