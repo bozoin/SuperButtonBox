@@ -90,6 +90,10 @@ const uint8_t localJoys[LOCAL_JOY_NB*2] = {};
 #define T_CYCLE 15
 #define BUTTON_COUNT 40 // (256 max)
 
+// DIALOGUE
+#define DIAL_CONF 1
+#define DIAL_UPDATE 0
+
 // MASQUE
 const uint8_t MASQUE_5b=0x1F;
 #define DISPLAY_ON 0x88
@@ -98,7 +102,7 @@ const uint8_t MASQUE_5b=0x1F;
 const uint8_t totalButton = LOCAL_SINGLE_BUTTON_NB + LOCAL_ROTARY_COUNT*2 + localTotalMatriceButton;
 const uint8_t localMOMButtonCount = LOCAL_SINGLE_BUTTON_NB + localTotalMatriceButton;
 
-uint8_t confRequest = 0;
+uint8_t confDialogue = DIAL_UPDATE;
 
 // Last state of the button
 uint8_t lastButtonState[totalButton];
@@ -280,7 +284,7 @@ void requestEvents()
   for(int i = 0; i<SLIDER_COUNT;i++){slider[i]=analogRead(sliderTest)/4;}
   for(int i = 0; i<SLIDER_COUNT;i++){Wire.write(slider[i]);}
   */
-  if (confRequest==1)
+  if (confDialogue==DIAL_CONF)
   {
     Wire.write(LOCAL_DISPLAY_NB);
     Wire.write(localMOMButtonCount);
@@ -290,7 +294,7 @@ void requestEvents()
     Wire.write(LOCAL_SLIDER_NB);
     Wire.write(LOCAL_JOY_NB);
 
-    confRequest=0;
+    confDialogue=DIAL_UPDATE;
   }
   else
   {
@@ -311,7 +315,7 @@ void receiveEvents(int numBytes)
   }
   if (numBytes==1 && n[0]==VIDE)
   {
-        confRequest=1;
+        confDialogue=DIAL_CONF;
   }
   else
   {

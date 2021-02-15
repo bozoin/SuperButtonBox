@@ -2,11 +2,21 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "..\\Windows-universal-samples\\Samples\\SerialArduino"
 		}
 	],
 	"settings": {
 		"files.associations": {
-			"*.tcc": "cpp"
+			"*.tcc": "cpp",
+			"array": "cpp",
+			"deque": "cpp",
+			"list": "cpp",
+			"string": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp",
+			"initializer_list": "cpp"
 		}
 	}
 }
