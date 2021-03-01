@@ -115,6 +115,11 @@ const uint8_t localDisplay[LOCAL_DISPLAY_NB] = {5};
 const uint8_t localSingleButton[LOCAL_SINGLE_BUTTON_NB]={LOCAL_NEXT_DISPLAY_IN,LOCAL_ROT_PULSE_IN,LOCAL_ROT_AXE_IN,LOCAL_ROT_KNOB_IN,LOCAL_SWITCH_PULSE_IN};
 uint8_t lastLocalButtonState[LOCAL_SINGLE_BUTTON_NB];
 
+/*
+***********************************
+SETUUUUUP
+***********************************
+*/
 
 void setup() {
   // Attend l'initialisation des autres boards
@@ -375,7 +380,7 @@ void loop() {
   // Read local button values
   getLocalButton();
   
-  requestButtonUpdate();
+  requestBoardsUpdate();
   delay(T_CYCLE);
 
   if (doRaz==1)
@@ -506,9 +511,233 @@ void refreshScreen(){
   }
 }
 
+void getLocalButton(){
+  for (uint8_t i =0; i<LOCAL_SINGLE_BUTTON_NB; i++)
+  {
+    int currentButtonState = !digitalRead(localSingleButton[i]);
+    if (currentButtonState != lastLocalButtonState[i])
+    {
+      //pads[0].setButton(i, currentButtonState); //TODO pas de pads ici < gestion de la config
+      if (i==NEXT_DISPLAY && currentButtonState==1)
+      {
+        if (current_display_conf==DISPLAYCONFCOUNT)
+        {
+          current_display_conf=0;
+        }
+        else
+        {
+          current_display_conf+=1;
+        }
+        confScreen();
+      }
+      else if (i==ROT_KNOB && currentButtonState==0)
+      {
+        razRotKnob();
+      }
+      else if (i==SWITCH_PULSE && currentButtonState==0)
+      {
+        razSwitch();
+      }
+      lastLocalButtonState[i] = currentButtonState;
+    }
+  }
+}
+
+void updateAxis(uint8_t board,uint8_t number,uint8_t value) 
+{
+  switch(number)
+  {
+    case 0 :  pads[board].setXAxis(value);     break;
+    case 1 :  pads[board].setYAxis(value);     break;
+    case 2 :  pads[board].setRxAxis(value);    break;
+    case 3 :  pads[board].setRyAxis(value);    break;
+    case 4 :  pads[board].setZAxis(value);     break;
+    case 5 :  pads[board].setRzAxis(value);    break;
+    case 6 :  pads[board].setRudder(value);    break;
+    case 7 :  pads[board].setThrottle(value);  break;
+    case 8 :  pads[board].setAccelerator(value);break;
+    case 9 :  pads[board].setBrake(value);     break;
+    case 10 : pads[board].setSteering(value);  break;
+  }
+}
+
+void requestBoardsUpdate(){
+  uint8_t data_count;
+  uint8_t j;
+  uint8_t nbResponse=3;
+  uint8_t response[nbResponse];
+
+  for (int i=0;i<BOARD_COUNT;i++)
+  {
+
+    j=0;
+    Wire.requestFrom(i2c_addr[i], nbResponse);   
+    while (j<data_count && Wire.available())
+    {
+      response[j]=Wire.read();
+      j++;
+    }
+
+    if (response[0]==TYPE_BUTTON)
+    {
+      lastButtonState[i][response[1]]=response[2];
+      pads[i].setButton(response[1], response[2]);
+    }
+    else if (response[0]==TYPE_JOY)
+    {
+      updateAxis(i, response[1], response[2]);
+      lastJoyState[i][response[1]]=response[2];
+    }    
+    else if (response[0]==TYPE_SLIDER)
+    {
+      updateAxis(i, joystickCount[i] + response[1], response[2]);
+      lastSliderState[i][response[1]]=response[2];
+    }    
+    else if (response[0]==TYPE_SWITCH2)
+    {
+      pads[i].setButton(2*response[1]+buttonCount[i]+lastSwitch2State[i][response[1]], 0);
+      pads[i].setButton(2*response[1]+buttonCount[i]+response[2], 1);
+      lastSwitch2State[i][response[1]]=response[2];
+      if(lastLocalButtonState[SWITCH_PULSE])
+      {
+        buttonRaz=2*response[1]+buttonCount[i]+response[2];
+        boardRaz=i;
+        doRaz=1;        
+      }
+    }
+    else if (response[0]==TYPE_SWITCH3)
+    {
+      pads[i].setButton(3*response[1]+buttonCount[i]+switch2Count[i]*2+lastSwitch3State[i][response[1]], 0);
+      pads[i].setButton(3*response[1]+buttonCount[i]+switch2Count[i]*2+response[2], 1);
+      lastSwitch3State[i][response[1]]=response[2];
+      if(lastLocalButtonState[SWITCH_PULSE])
+      {
+        buttonRaz=3*response[1]+buttonCount[i]+switch2Count[i]*2+response[2];
+        boardRaz=i;
+        doRaz=1;        
+      }
+    }    
+    else if (response[0]==TYPE_ROTARY)
+    {
+      if (lastLocalButtonState[ROT_PULSE])
+      {
+        if ((int8_t) response[2]>0)
+        {
+          pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2+1, 1);
+          buttonRaz=lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2+1;
+        }
+        else if ((int8_t) response[2]<0)
+        {
+          pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2, 1);
+          buttonRaz=lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2;
+        }
+        boardRaz=i;
+        doRaz=1;
+      }
+      if (lastLocalButtonState[ROT_AXE])
+      {
+          if (lastRotaryAxeState[i][response[1]]+(int8_t)response[2]<0)
+          {
+            lastRotaryAxeState[i][response[1]]=0;
+          }
+          else if (lastRotaryAxeState[i][response[1]]+(int8_t)response[2]>0)
+          {
+            lastRotaryAxeState[i][response[1]]=MAX_AXIS;
+          }
+          else
+          {
+            lastRotaryAxeState[i][response[1]]=lastRotaryAxeState[i][response[1]]+(int8_t)response[2];
+          }
+          updateAxis(i,joystickCount[i] + sliderCount[i] + response[1], lastRotaryAxeState[i][response[1]]);
+      }
+      if (lastLocalButtonState[ROT_KNOB])
+      {
+
+        pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*response[1], 0);
+        if ((int8_t) response[2]>0)
+        {
+          lastRotaryButState[i][response[1]]++;
+          if (lastRotaryButState[i][response[1]]==MAX_ROTARY_BUTTON)
+          {
+            lastRotaryButState[i][response[1]]=0;
+          }         
+        }
+        else if ((int8_t) response[2]<0)
+        {
+          if (lastRotaryButState[i][response[1]]==0)
+          {
+            lastRotaryButState[i][response[1]]=MAX_ROTARY_BUTTON-1;
+          }  
+          else
+          {
+            lastRotaryButState[i][response[1]]--;
+          }       
+        }
+        pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*response[1], 1);
+      }
+    }        
+  }
+}
+
+void sendI2CMsg(uint16_t msg, int adresse){ 
+  Wire.beginTransmission(adresse); 
+  Wire.write((byte *)&msg, 2);          
+  Wire.endTransmission(); 
+}
+
+void screenDebug(String msg){
+      digitalWrite(localDisplay[0],HIGH);
+      display.clearDisplay();
+      display.setTextSize(5); // Draw 2X-scale text
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(0, 0);
+      //display.println(F("test"));
+      display.println(msg);
+      display.display();      // Show initial text
+      digitalWrite(localDisplay[0],LOW);
+}
+
+void razRotKnob(){
+  for (uint8_t i =0;i<BOARD_COUNT;i++)
+  {
+    for(uint8_t j=0;j<rotaryCount[i];j++)
+    {
+      lastRotaryButState[i][j]=0;
+      for(uint8_t n=0;n<MAX_ROTARY_BUTTON;n++)
+      {
+        pads[i].setButton(n+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*j, 0);
+      }
+    }
+  }
+}
+
+void razSwitch(){
+  for (uint8_t i =0;i<BOARD_COUNT;i++)
+  {
+      for(uint8_t j=0;j<switch2Count[i];j++)
+    {
+      lastSwitch2State[i][j]=0;
+      for(uint8_t n=0;n<3;n++)
+      {
+        pads[i].setButton(n+buttonCount[i]+2*j, 0);
+      }
+    }
+    for(uint8_t j=0;j<switch3Count[i];j++)
+    {
+      lastSwitch3State[i][j]=0;
+      for(uint8_t n=0;n<3;n++)
+      {
+        pads[i].setButton(n+buttonCount[i]+switch2Count[i]*2+3*j, 0);
+      }
+    }
+  }
+}
+
+
+
 // TODO test
-// void initAxis2() dans l'ordre on s'en fout des joy TODO PAS BON
 /*
+// void initAxis2() dans l'ordre on s'en fout des joy TODO PAS BON
 void initAxis(){
   uint8_t axeCount = 0;
   uint8_t boardCount = 0;
@@ -634,25 +863,8 @@ void initAxis2(){
       j++;
     }
   }
-}
-*/   
+} 
 
-void requestButtonUpdate()
-{
-
-  
-  requestBoardsUpdate();
-
-  // RAZ rotary encoder TODO create value max rotary et min rotary ?
-  /*
-  for(int i=rotaryTotal; i<BUTTON_MAX ;i++)
-  {
-    pads[0].setButton(i,0);
-
-  }
-  */
-}
-/*
 void getLocalJoy()
 {
   for(uint8_t i=0;i<(LOCAL_JOY_NB*2);i++)
@@ -668,217 +880,8 @@ void getLocalSlider()
       updateAxis(0,LOCAL_JOY_NB*2+i,analogRead(localSliders[i])/4);
   }
 }
-*/
-void getLocalButton(){
-  for (uint8_t i =0; i<LOCAL_SINGLE_BUTTON_NB; i++)
-  {
-    int currentButtonState = !digitalRead(localSingleButton[i]);
-    if (currentButtonState != lastLocalButtonState[i])
-    {
-      //pads[0].setButton(i, currentButtonState); //TODO pas de pads ici < gestion de la config
-      if (i==NEXT_DISPLAY && currentButtonState==1)
-      {
-        if (current_display_conf==DISPLAYCONFCOUNT)
-        {
-          current_display_conf=0;
-        }
-        else
-        {
-          current_display_conf+=1;
-        }
-        confScreen();
-      }
-      else if (i==ROT_KNOB && currentButtonState==0)
-      {
-        razRotKnob();
-      }
-      else if (i==SWITCH_PULSE && currentButtonState==0)
-      {
-        razSwitch();
-      }
-      lastLocalButtonState[i] = currentButtonState;
-    }
-  }
-}
-
-/*
-void getLocalRotary(){
-  long rotaryRead;
-  for(int i = 0; i<rotaryCount[0]; i++){
-    rotaryRead = rotaryEncoder[i].read();
-    if (rotaryConf[i]==0) //Rotary pulse
-    {
-      if (rotaryRead<0) {
-        pads[0].setButton(rotaryPulse1+(i*2),1);
-        rotaryEncoder[i].write(0);
-      }
-      else if (rotaryRead>0) {
-        pads[0].setButton(rotaryPulse1+(i*2)+1,1);
-        rotaryEncoder[i].write(0);
-      }
-    }
-    else // Rotary pot
-    {
-        int rotaryWrite;
-        if (rotaryRead>maxRotaryPot)
-        {
-            rotaryEncoder[i].write(maxRotaryPot);
-            rotaryWrite = maxRotaryPot;
-        }
-        else if(rotaryRead<minRotaryPot)
-        {
-            rotaryEncoder[i].write(minRotaryPot);
-            rotaryWrite = minRotaryPot;
-        }
-        else
-        {
-            rotaryWrite=rotaryRead;
-        }
-        updateAxis(0,i+(joystickCount[0]*2)+sliderCount[0],map(rotaryWrite,minRotaryPot,maxRotaryPot,0,255));
-    }
-  }
-}
-*/
 
 
-void updateAxis(uint8_t board,uint8_t number,uint8_t value) 
-{
-  switch(number)
-  {
-    case 0 :  pads[board].setXAxis(value);     break;
-    case 1 :  pads[board].setYAxis(value);     break;
-    case 2 :  pads[board].setRxAxis(value);    break;
-    case 3 :  pads[board].setRyAxis(value);    break;
-    case 4 :  pads[board].setZAxis(value);     break;
-    case 5 :  pads[board].setRzAxis(value);    break;
-    case 6 :  pads[board].setRudder(value);    break;
-    case 7 :  pads[board].setThrottle(value);  break;
-    case 8 :  pads[board].setAccelerator(value);break;
-    case 9 :  pads[board].setBrake(value);     break;
-    case 10 : pads[board].setSteering(value);  break;
-  }
-}
-
-void requestBoardsUpdate(){
-  uint8_t data_count;
-  uint8_t j;
-  uint8_t nbResponse=3;
-  uint8_t response[nbResponse];
-
-  for (int i=0;i<BOARD_COUNT;i++)
-  {
-
-    j=0;
-    Wire.requestFrom(i2c_addr[i], nbResponse);   
-    while (j<data_count && Wire.available())
-    {
-      response[j]=Wire.read();
-      j++;
-    }
-
-    if (response[0]==TYPE_BUTTON)
-    {
-      //TODO trouver le numéro global à partir du bouton local
-      lastButtonState[i][response[1]]=response[2];
-      pads[i].setButton(response[1], response[2]);
-    }
-    else if (response[0]==TYPE_JOY)
-    {
-      updateAxis(i, response[1], response[2]);
-      lastJoyState[i][response[1]]=response[2];
-    }    
-    else if (response[0]==TYPE_SLIDER)
-    {
-      updateAxis(i, joystickCount[i] + response[1], response[2]);
-      lastSliderState[i][response[1]]=response[2];
-    }    
-    else if (response[0]==TYPE_SWITCH2)
-    {
-      pads[i].setButton(2*response[1]+buttonCount[i]+lastSwitch2State[i][response[1]], 0);
-      pads[i].setButton(2*response[1]+buttonCount[i]+response[2], 1);
-      lastSwitch2State[i][response[1]]=response[2];
-      if(lastLocalButtonState[SWITCH_PULSE])
-      {
-        buttonRaz=2*response[1]+buttonCount[i]+response[2];
-        boardRaz=i;
-        doRaz=1;        
-      }
-    }
-    else if (response[0]==TYPE_SWITCH3)
-    {
-      pads[i].setButton(3*response[1]+buttonCount[i]+switch2Count[i]*2+lastSwitch3State[i][response[1]], 0);
-      pads[i].setButton(3*response[1]+buttonCount[i]+switch2Count[i]*2+response[2], 1);
-      lastSwitch3State[i][response[1]]=response[2];
-      if(lastLocalButtonState[SWITCH_PULSE])
-      {
-        buttonRaz=3*response[1]+buttonCount[i]+switch2Count[i]*2+response[2];
-        boardRaz=i;
-        doRaz=1;        
-      }
-    }    
-    else if (response[0]==TYPE_ROTARY)
-    {
-      if (lastLocalButtonState[ROT_PULSE])
-      {
-        if ((int8_t) response[2]>0)
-        {
-          pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2+1, 1);
-          buttonRaz=lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2+1;
-        }
-        else if ((int8_t) response[2]<0)
-        {
-          pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2, 1);
-          buttonRaz=lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+response[1]*2;
-        }
-        boardRaz=i;
-        doRaz=1;
-      }
-      if (lastLocalButtonState[ROT_AXE])
-      {
-          if (lastRotaryAxeState[i][response[1]]+(int8_t)response[2]<0)
-          {
-            lastRotaryAxeState[i][response[1]]=0;
-          }
-          else if (lastRotaryAxeState[i][response[1]]+(int8_t)response[2]>0)
-          {
-            lastRotaryAxeState[i][response[1]]=MAX_AXIS;
-          }
-          else
-          {
-            lastRotaryAxeState[i][response[1]]=lastRotaryAxeState[i][response[1]]+(int8_t)response[2];
-          }
-          updateAxis(i,joystickCount[i] + sliderCount[i] + response[1], lastRotaryAxeState[i][response[1]]);
-      }
-      if (lastLocalButtonState[ROT_KNOB])
-      {
-
-        pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*response[1], 0);
-        if ((int8_t) response[2]>0)
-        {
-          lastRotaryButState[i][response[1]]++;
-          if (lastRotaryButState[i][response[1]]==MAX_ROTARY_BUTTON)
-          {
-            lastRotaryButState[i][response[1]]=0;
-          }         
-        }
-        else if ((int8_t) response[2]<0)
-        {
-          if (lastRotaryButState[i][response[1]]==0)
-          {
-            lastRotaryButState[i][response[1]]=MAX_ROTARY_BUTTON-1;
-          }  
-          else
-          {
-            lastRotaryButState[i][response[1]]--;
-          }       
-        }
-        pads[i].setButton(lastRotaryButState[i][response[1]]+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*response[1], 1);
-      }
-    }        
-  }
-}
-
-/*
 void requestMega1Update(){
   uint8_t j=1;
   uint8_t data_count=sliderCount[j]+ joystickCount[j]*2 + rotaryCount[j] +2;
@@ -930,57 +933,43 @@ void requestMega2Update(){
   }
 
 }
+
+
+void getLocalRotary(){
+  long rotaryRead;
+  for(int i = 0; i<rotaryCount[0]; i++){
+    rotaryRead = rotaryEncoder[i].read();
+    if (rotaryConf[i]==0) //Rotary pulse
+    {
+      if (rotaryRead<0) {
+        pads[0].setButton(rotaryPulse1+(i*2),1);
+        rotaryEncoder[i].write(0);
+      }
+      else if (rotaryRead>0) {
+        pads[0].setButton(rotaryPulse1+(i*2)+1,1);
+        rotaryEncoder[i].write(0);
+      }
+    }
+    else // Rotary pot
+    {
+        int rotaryWrite;
+        if (rotaryRead>maxRotaryPot)
+        {
+            rotaryEncoder[i].write(maxRotaryPot);
+            rotaryWrite = maxRotaryPot;
+        }
+        else if(rotaryRead<minRotaryPot)
+        {
+            rotaryEncoder[i].write(minRotaryPot);
+            rotaryWrite = minRotaryPot;
+        }
+        else
+        {
+            rotaryWrite=rotaryRead;
+        }
+        updateAxis(0,i+(joystickCount[0]*2)+sliderCount[0],map(rotaryWrite,minRotaryPot,maxRotaryPot,0,255));
+    }
+  }
+}
 */
-void sendI2CMsg(uint16_t msg, int adresse){ 
-  Wire.beginTransmission(adresse); 
-  Wire.write((byte *)&msg, 2);          
-  Wire.endTransmission(); 
-}
 
-void screenDebug(String msg){
-      digitalWrite(localDisplay[0],HIGH);
-      display.clearDisplay();
-      display.setTextSize(5); // Draw 2X-scale text
-      display.setTextColor(SSD1306_WHITE);
-      display.setCursor(0, 0);
-      //display.println(F("test"));
-      display.println(msg);
-      display.display();      // Show initial text
-      digitalWrite(localDisplay[0],LOW);
-}
-
-void razRotKnob(){
-  for (uint8_t i =0;i<BOARD_COUNT;i++)
-  {
-    for(uint8_t j=0;j<rotaryCount[i];j++)
-    {
-      lastRotaryButState[i][j]=0;
-      for(uint8_t n=0;n<MAX_ROTARY_BUTTON;n++)
-      {
-        pads[i].setButton(n+buttonCount[i]+switch2Count[i]*2+switch3Count[i]*3+rotaryCount[i]*2+MAX_ROTARY_BUTTON*j, 0);
-      }
-    }
-  }
-}
-
-void razSwitch(){
-  for (uint8_t i =0;i<BOARD_COUNT;i++)
-  {
-      for(uint8_t j=0;j<switch2Count[i];j++)
-    {
-      lastSwitch2State[i][j]=0;
-      for(uint8_t n=0;n<3;n++)
-      {
-        pads[i].setButton(n+buttonCount[i]+2*j, 0);
-      }
-    }
-    for(uint8_t j=0;j<switch3Count[i];j++)
-    {
-      lastSwitch3State[i][j]=0;
-      for(uint8_t n=0;n<3;n++)
-      {
-        pads[i].setButton(n+buttonCount[i]+switch2Count[i]*2+3*j, 0);
-      }
-    }
-  }
-}
