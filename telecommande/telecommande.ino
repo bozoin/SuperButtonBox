@@ -156,7 +156,7 @@ void setup() {
   }
   for (int index = 0; index < NUMSINGLEBUTTON; index++)
   {
-    pinMode(index, INPUT_PULLUP);
+    pinMode(buttonPins[index], INPUT_PULLUP);
   }  
 }
 
